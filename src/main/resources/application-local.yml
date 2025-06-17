@@ -1,0 +1,6 @@
+spring.application.name: toiletDto-finder-service
+
+overpass.url: https://overpass-api.de/api/interpreter
+
+telegram.bot.token:
+telegram.bot.username:
