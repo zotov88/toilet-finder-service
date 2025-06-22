@@ -1,8 +1,7 @@
-package com.example.toiletfinderservice.controller;
+package com.example.toiletfinderservice.service;
 
 import com.example.toiletfinderservice.dto.RequestLocationDto;
 import com.example.toiletfinderservice.dto.ToiletDto;
-import com.example.toiletfinderservice.service.OverpassService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +25,7 @@ import java.util.Map;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class BotController extends TelegramLongPollingBot {
+public class BotHandler extends TelegramLongPollingBot {
 
     private final OverpassService overpassService;
     private final Map<Long, Integer> userRadiusMap = new HashMap<>();
@@ -48,27 +47,14 @@ public class BotController extends TelegramLongPollingBot {
         }
     }
 
-    private ReplyKeyboardMarkup createRadiusKeyboard() {
-        ReplyKeyboardMarkup keyboard = new ReplyKeyboardMarkup();
-        keyboard.setResizeKeyboard(true);
-        keyboard.setOneTimeKeyboard(false);
-        keyboard.setSelective(true);
+    @Override
+    public String getBotUsername() {
+        return botUsername;
+    }
 
-        List<KeyboardRow> keyboardRows = new ArrayList<>();
-
-        KeyboardRow row1 = new KeyboardRow();
-        row1.add("500 м");
-        row1.add("1000 м");
-
-        KeyboardRow row2 = new KeyboardRow();
-        row2.add("1500 м");
-        row2.add("2000 м");
-
-        keyboardRows.add(row1);
-        keyboardRows.add(row2);
-        keyboard.setKeyboard(keyboardRows);
-
-        return keyboard;
+    @Override
+    public String getBotToken() {
+        return botToken;
     }
 
     @Override
@@ -87,28 +73,52 @@ public class BotController extends TelegramLongPollingBot {
 
     private void commandHandler(Update update) {
         String command = update.getMessage().getText();
+
         Long chatId = update.getMessage().getChatId();
         if ("/start".equals(command)) {
             sendWelcomeMessage(chatId);
+        }
+        if ("/help".equals(command)) {
+            sendHelpMessage(chatId);
         }
         if (command.matches("\\d+ м")) {
             setRadius(chatId, command);
         }
     }
 
+    private void sendHelpMessage(Long chatId) {
+        sendText(chatId, "Чтобы получить список в туалетов, выберете радиус поиска и отправьте мне свою геопозицию");
+    }
+
     private void sendWelcomeMessage(Long chatId) {
         int currentRadius = userRadiusMap.getOrDefault(chatId, 500);
+        SendMessage message = SendMessage.builder()
+                .chatId(chatId.toString())
+                .text("🚽 Выберите радиус поиска туалетов (текущий: " + currentRadius + " м)")
+                .replyMarkup(createRadiusKeyboard())
+                .build();
+        extractedMessage(message);
+    }
 
-        SendMessage message = new SendMessage();
-        message.setChatId(chatId.toString());
-        message.setText("🚽 Выберите радиус поиска туалетов (текущий: " + currentRadius + " м)");
-        message.setReplyMarkup(createRadiusKeyboard());
+    private ReplyKeyboardMarkup createRadiusKeyboard() {
+        List<KeyboardRow> keyboardRows = new ArrayList<>();
 
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            log.error("Error sending welcome message", e);
-        }
+        KeyboardRow row1 = new KeyboardRow();
+        row1.add("500 м");
+        row1.add("1000 м");
+        KeyboardRow row2 = new KeyboardRow();
+        row2.add("1500 м");
+        row2.add("2000 м");
+
+        keyboardRows.add(row1);
+        keyboardRows.add(row2);
+
+        return ReplyKeyboardMarkup.builder()
+                .resizeKeyboard(true)
+                .oneTimeKeyboard(false)
+                .selective(true)
+                .keyboard(keyboardRows)
+                .build();
     }
 
     private void setRadius(Long chatId, String command) {
@@ -119,7 +129,6 @@ public class BotController extends TelegramLongPollingBot {
 
     private void findToilet(Update update) {
         int radius = userRadiusMap.get(update.getMessage().getChatId());
-
         RequestLocationDto requestLocationDto = RequestLocationDto.builder()
                 .lat(update.getMessage().getLocation().getLatitude())
                 .lon(update.getMessage().getLocation().getLongitude())
@@ -139,35 +148,31 @@ public class BotController extends TelegramLongPollingBot {
     }
 
     private void sendText(Long chatId, String text) {
-        SendMessage message = new SendMessage();
-        message.setChatId(chatId.toString());
-        message.setText(text);
+        SendMessage message = SendMessage.builder()
+                .chatId(chatId.toString())
+                .text(text)
+                .build();
+        extractedMessage(message);
+    }
+
+    private void extractedMessage(SendMessage message) {
         try {
             execute(message);
         } catch (TelegramApiException e) {
-            e.printStackTrace();
+            log.error("Error sending welcome message", e);
         }
     }
 
     private void sendLocation(Long chatId, double lat, double lon) {
-        SendLocation location = new SendLocation();
-        location.setChatId(chatId.toString());
-        location.setLatitude(lat);
-        location.setLongitude(lon);
+        SendLocation location = SendLocation.builder()
+                .chatId(chatId.toString())
+                .latitude(lat)
+                .longitude(lon)
+                .build();
         try {
             execute(location);
         } catch (TelegramApiException e) {
-            e.printStackTrace();
+            log.error("Error sending welcome message", e);
         }
-    }
-
-    @Override
-    public String getBotUsername() {
-        return botUsername;
-    }
-
-    @Override
-    public String getBotToken() {
-        return botToken;
     }
 }
